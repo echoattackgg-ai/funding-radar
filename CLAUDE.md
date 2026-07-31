@@ -31,3 +31,11 @@ No test framework is configured in this project.
 
 - GitHub repo: `echoattackgg-ai/funding-radar` (remote `origin`), deployed to Vercel at `funding-radar-nine.vercel.app`.
 - Vercel is connected to the GitHub repo and auto-deploys on every push to `main` — no manual Vercel step needed after `git push`.
+
+## Как со мной работать
+
+- Я не программист, объясняй простым языком.
+- Одна задача за раз.
+- После изменений говори, что мне проверить.
+- Перед сложным — сначала план, потом код.
+- Отвечай на русском.
