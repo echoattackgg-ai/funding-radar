@@ -17,3 +17,30 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    r: 3;
+  }
+  50% {
+    opacity: 1;
+    r: 4.5;
+  }
+}
+
+@keyframes line-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.network-node {
+  animation: node-pulse 3s ease-in-out infinite;
+}
+
+.network-line {
+  stroke-dasharray: 6 10;
+  animation: line-flow 2.5s linear infinite;
+}
