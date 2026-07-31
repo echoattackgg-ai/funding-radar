@@ -117,16 +117,31 @@ export default function LiquidationCalculator() {
         )}
       </div>
 
-      <p className="mt-4 text-xs leading-relaxed text-zinc-500">
-        Формула (изолированная маржа, упрощённая, без комиссий и ставки
-        поддерживающей маржи):
-        <br />
-        Long: Цена_ликв = Цена_входа × (1 − 1 / Плечо)
-        <br />
-        Short: Цена_ликв = Цена_входа × (1 + 1 / Плечо)
-        <br />
-        Движение против позиции = 100 / Плечо, %
-      </p>
+      <div className="relative mt-4 overflow-hidden rounded-2xl border border-white/15 bg-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-xl backdrop-saturate-150">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/25 via-white/5 to-transparent opacity-60"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-px rounded-2xl border border-white/10"
+        />
+        <div className="relative">
+          <p className="mb-2 text-xs font-medium tracking-wide text-zinc-300 uppercase">
+            Формула расчёта
+          </p>
+          <p className="font-mono text-xs leading-relaxed text-zinc-300">
+            Изолированная маржа, упрощённо — без комиссий и ставки
+            поддерживающей маржи:
+            <br />
+            Long: Цена_ликв = Цена_входа × (1 − 1 / Плечо)
+            <br />
+            Short: Цена_ликв = Цена_входа × (1 + 1 / Плечо)
+            <br />
+            Движение против позиции = 100 / Плечо, %
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
