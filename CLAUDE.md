@@ -35,6 +35,11 @@ No test framework is configured in this project.
   - APR (%): **2 decimal places**
 - In code, apply this with `.toFixed(4)` for rate and `.toFixed(2)` for APR at the point of output (see `scripts/funding-rate.mjs` and `supabase/functions/collect-funding-rates/index.ts` for the calculation reference — those compute at full precision; formatting happens only when printing/rendering).
 
+## Supabase
+
+- API keys are the new format: `sb_publishable_...` for the browser (`NEXT_PUBLIC_SUPABASE_ANON_KEY`) and `sb_secret_...` for server-side use (`SUPABASE_SERVICE_ROLE_KEY` locally, `SERVICE_KEY` as the edge function's own secret — the function can't read `SUPABASE_`-prefixed secrets since that prefix is reserved by the platform). Legacy JWT-format keys are disabled for this project.
+- If RLS is enabled on a table with no read policy, Supabase returns an empty list with `200 OK` — no error. If a page shows no data but the table isn't actually empty, don't start debugging the fetch code — first compare the same query run with the anon key vs. the service-role key; a mismatch (anon empty, service-role has rows) means it's a missing RLS policy, not a bug in the app.
+
 ## Deployment
 
 - GitHub repo: `echoattackgg-ai/funding-radar` (remote `origin`), deployed to Vercel at `funding-radar-nine.vercel.app`.
