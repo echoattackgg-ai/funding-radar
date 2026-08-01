@@ -65,7 +65,7 @@ async function getOkx() {
 Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    Deno.env.get("SERVICE_KEY")!,
   );
 
   const rows = await Promise.all([getBinance(), getBybit(), getOkx()]);
