@@ -27,6 +27,14 @@ No test framework is configured in this project.
   - Position size (USD) is collected as an input but does not affect this formula — it cancels out algebraically.
 - "Liquid glass" visual pattern (used for the formula box and the coin bubbles): `backdrop-blur`, translucent `bg-white/10`, `border-white/15`, plus a `pointer-events-none` absolutely-positioned gradient overlay div for the highlight/shine. Reuse this pattern for new glass-style UI instead of inventing a new one.
 
+## Data formatting
+
+- Store funding-rate data (`rate_percent`, `apr_percent`, `interval_hours`) at full precision everywhere it's persisted (Supabase `funding_rates` table, scripts' internal calculations) — never round before storing.
+- Round only at display time, consistently across every surface that shows this data (website, social posts, Telegram/Discord bot, etc.):
+  - funding rate (%): **4 decimal places**
+  - APR (%): **2 decimal places**
+- In code, apply this with `.toFixed(4)` for rate and `.toFixed(2)` for APR at the point of output (see `scripts/funding-rate.mjs` and `supabase/functions/collect-funding-rates/index.ts` for the calculation reference — those compute at full precision; formatting happens only when printing/rendering).
+
 ## Deployment
 
 - GitHub repo: `echoattackgg-ai/funding-radar` (remote `origin`), deployed to Vercel at `funding-radar-nine.vercel.app`.
