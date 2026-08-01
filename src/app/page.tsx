@@ -1,4 +1,7 @@
+import FundingRatesTable from "@/components/FundingRatesTable";
 import LiquidationCalculator from "@/components/LiquidationCalculator";
+
+export const revalidate = 0;
 
 export default function Home() {
   return (
@@ -6,6 +9,7 @@ export default function Home() {
       <h1 className="text-4xl font-semibold tracking-tight text-foreground">
         Funding Radar
       </h1>
+      <FundingRatesTable />
       <LiquidationCalculator />
     </div>
   );
