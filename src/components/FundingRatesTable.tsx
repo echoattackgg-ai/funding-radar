@@ -7,6 +7,8 @@ import { AFFILIATE_LINKS } from "@/lib/affiliate-links";
 import RelativeTime from "@/components/RelativeTime";
 import GlassCard from "@/components/GlassCard";
 import StateMessage from "@/components/StateMessage";
+import CoinIcon from "@/components/CoinIcon";
+import Tooltip from "@/components/Tooltip";
 
 const EXCHANGES: ExchangeName[] = ["Binance", "Bybit", "OKX"];
 
@@ -116,7 +118,7 @@ function SortableHeader({
       ) : (
         label
       )}
-      {active && <span className="ml-1 text-zinc-500">{sortDirection === "asc" ? "▲" : "▼"}</span>}
+      {active && <span className="ml-1 text-zinc-400">{sortDirection === "asc" ? "▲" : "▼"}</span>}
     </th>
   );
 }
@@ -165,8 +167,11 @@ function FundingRateCard({ row }: { row: GroupedFundingRate }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
       <div className="flex items-center justify-between gap-3 px-1 pb-2">
-        <span className="text-lg font-semibold">{row.symbol}</span>
-        <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-sm font-semibold tabular-nums text-sky-300">
+        <span className="inline-flex items-center gap-2 text-lg font-semibold">
+          <CoinIcon symbol={row.symbol} size={22} />
+          {row.symbol}
+        </span>
+        <span className="rounded-full bg-orange-500/15 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums text-orange-400">
           {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
         </span>
       </div>
@@ -191,10 +196,10 @@ function FundingRateCard({ row }: { row: GroupedFundingRate }) {
                 {href && <ExternalLinkIcon />}
               </span>
               <span className="text-right">
-                <span className="block text-base font-semibold tabular-nums">
+                <span className="block font-mono text-base font-semibold tabular-nums">
                   {cell.apr_percent.toFixed(2)}%
                 </span>
-                <span className="block text-xs tabular-nums text-zinc-500/80">
+                <span className="block font-mono text-xs tabular-nums text-zinc-400">
                   {cell.rate_percent.toFixed(4)}% · {cell.interval_hours}h
                 </span>
               </span>
@@ -308,7 +313,7 @@ export default function FundingRatesTable({
       <div className="mb-4 flex items-baseline justify-between gap-4">
         <h2 className="text-lg font-medium">Funding rates by coin</h2>
         {latestUpdatedAt && (
-          <p className="text-xs whitespace-nowrap text-zinc-500">
+          <p className="text-xs whitespace-nowrap text-zinc-400">
             Updated <RelativeTime dateIso={latestUpdatedAt} />
           </p>
         )}
@@ -353,7 +358,12 @@ export default function FundingRatesTable({
 
               return (
                 <tr key={row.symbol} className="transition-colors hover:bg-white/5">
-                  <td className="py-2 pr-4 font-medium">{row.symbol}</td>
+                  <td className="py-2 pr-4 font-medium">
+                    <span className="inline-flex items-center gap-2">
+                      <CoinIcon symbol={row.symbol} size={18} />
+                      {row.symbol}
+                    </span>
+                  </td>
                   {EXCHANGES.map((exchange) => {
                     const cell = row.rates[exchange];
                     const isMax = maxApr !== null && cell?.apr_percent === maxApr;
@@ -372,25 +382,26 @@ export default function FundingRatesTable({
                         }
                       >
                         {cell ? (
-                          <span
-                            className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap"
-                            title={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}
+                          <Tooltip
+                            content={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}
                           >
-                            <span className="inline-block w-[8ch] text-right text-base font-semibold tabular-nums">
-                              {cell.apr_percent.toFixed(2)}%
+                            <span className="inline-flex w-full items-baseline justify-end gap-1 font-mono whitespace-nowrap">
+                              <span className="inline-block w-[8ch] text-right text-base font-semibold tabular-nums">
+                                {cell.apr_percent.toFixed(2)}%
+                              </span>
+                              <span className="inline-block w-[11ch] text-right text-xs text-zinc-400 tabular-nums">
+                                ({cell.rate_percent.toFixed(4)}%)
+                              </span>
                             </span>
-                            <span className="inline-block w-[11ch] text-right text-xs text-zinc-500/80 tabular-nums">
-                              ({cell.rate_percent.toFixed(4)}%)
-                            </span>
-                          </span>
+                          </Tooltip>
                         ) : (
-                          <span className="text-zinc-600">—</span>
+                          <span className="text-zinc-400">—</span>
                         )}
                       </td>
                     );
                   })}
                   <td className="py-2 pr-4 text-right whitespace-nowrap">
-                    <span className="inline-block w-[8ch] text-right tabular-nums">
+                    <span className="inline-block w-[8ch] font-mono text-right font-semibold tabular-nums text-orange-400">
                       {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
                     </span>
                   </td>

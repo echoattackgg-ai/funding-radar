@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { getGroupedFundingRates } from "@/lib/funding-rates";
 import FundingRatesTable from "@/components/FundingRatesTable";
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "All funding rates",
+  description: "Every tracked coin across Binance, Bybit and OKX, sorted by spread.",
+};
 
 export default async function FundingPage() {
   const { rows, error } = await getGroupedFundingRates();

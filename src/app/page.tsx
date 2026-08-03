@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import FundingRatesTable from "@/components/FundingRatesTable";
 import LiquidationCalculator from "@/components/LiquidationCalculator";
 import { getGroupedFundingRates } from "@/lib/funding-rates";
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  description:
+    "Compare funding rates across Binance, Bybit and OKX for the same coin, and calculate your liquidation price for any leverage.",
+};
 
 export default async function Home() {
   const { rows, error } = await getGroupedFundingRates();

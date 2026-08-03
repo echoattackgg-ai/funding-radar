@@ -15,17 +15,22 @@ No test framework is configured in this project.
 
 ## Architecture
 
-- Next.js App Router, single route (`/`) at `src/app/page.tsx`. TypeScript + Tailwind CSS v4 via `@tailwindcss/postcss` — there is no `tailwind.config.*`; the theme is declared inline in `src/app/globals.css` with `@theme inline`.
+- Next.js App Router, two routes: `/` (`src/app/page.tsx`) and `/funding` (`src/app/funding/page.tsx`). TypeScript + Tailwind CSS v4 via `@tailwindcss/postcss` — there is no `tailwind.config.*`; the theme is declared inline in `src/app/globals.css` with `@theme inline`.
 - Path alias `@/*` → `src/*` (see `tsconfig.json`).
-- Dark theme is forced, not OS-driven: the `dark` class is hardcoded on `<html>` in `src/app/layout.tsx`, and `globals.css` defines a single dark `:root` palette. There is no light-mode variant.
-- `src/app/layout.tsx` renders `CryptoSideBackground` behind `{children}` on every page — it's purely decorative (`aria-hidden`, `pointer-events-none`).
-- `src/components/CryptoSideBackground.tsx` — one full-viewport fixed gradient layer (`-z-20`, mixed black/white/gray radial gradients) plus two `lg:`-only side strips (`-z-10`) holding floating "glass" coin bubbles. The full-width gradient and the side strips must stay visually seamless (same gradient recipe) — don't reintroduce a per-strip background. Bubble float animation is the `.crypto-bubble` / `bubble-float` keyframe in `globals.css`.
-- `src/components/LiquidationCalculator.tsx` — the only client component (`"use client"`) and the only interactive piece. Computes crypto-futures liquidation price with the simplified isolated-margin formula (no fees, no maintenance-margin rate):
+- Dark theme is forced, not OS-driven: the `dark` class is hardcoded on `<html>` in `src/app/layout.tsx`, and `globals.css` defines a single dark `:root` palette (`--background: #111113`, `--foreground: #f4f4f5`). There is no light-mode variant.
+- Design direction is "Dune Data Grid": near-black background, thin 1px grid texture, orange (`orange-400`/`orange-500`) as the one brand/emphasis accent, sky blue reserved strictly for links ("blue means clickable"), green/red reserved strictly for data (max/min rate highlighting). Don't reuse orange for links or blue for non-link emphasis — that conflation was a deliberate fix, not an accident.
+- Fonts: IBM Plex Sans (`--font-plex-sans`, Tailwind `font-sans`) for UI/headings, IBM Plex Mono (`--font-plex-mono`, Tailwind `font-mono`) for all numeric output. Any new numeric display should get `font-mono tabular-nums` explicitly — `tabular-nums` alone is not enough per the data-formatting rules below.
+- Text contrast: don't use opacity modifiers (`/80`, `/70`…) on readable text — they were the cause of a past AA-contrast failure (`zinc-500/80` measured ~3:1). Secondary/muted text should be `zinc-400` at full opacity (~5.7:1 on the glass surfaces used throughout), not `zinc-500` or dimmer.
+- `src/app/layout.tsx` renders `GridBackground` behind `{children}` on every page — it's purely decorative (`aria-hidden`, `pointer-events-none`).
+- `src/components/GridBackground.tsx` — flat background color + a faint 1px grid (`.site-grid` in `globals.css`) + a soft top vignette, all fixed full-viewport layers at `-z-20`. No gradients, no animation, nothing that moves — kept deliberately the least decorative of the design directions considered.
+- `src/components/LiquidationCalculator.tsx` — the only client component (`"use client"`) and the only interactive piece besides `FundingRatesTable`. Computes crypto-futures liquidation price with the simplified isolated-margin formula (no fees, no maintenance-margin rate):
   - long: `entry * (1 - 1/leverage)`
   - short: `entry * (1 + 1/leverage)`
   - percent move against position: `100 / leverage` (same for both directions)
   - Position size (USD) is collected as an input but does not affect this formula — it cancels out algebraically.
-- "Liquid glass" visual pattern (used for the formula box and the coin bubbles): `backdrop-blur`, translucent `bg-white/10`, `border-white/15`, plus a `pointer-events-none` absolutely-positioned gradient overlay div for the highlight/shine. Reuse this pattern for new glass-style UI instead of inventing a new one.
+- "Liquid glass" visual pattern (`GlassCard`): `backdrop-blur`, translucent `bg-white/10`, `border-white/15`, plus a `pointer-events-none` absolutely-positioned gradient overlay div for the highlight/shine. `GlassCard` also has a `variant="accent"` (stronger orange-tinted border + glow, used by the liquidation calculator's outer card) — reuse this pattern for new glass-style UI instead of inventing a new one. Glass/blur is for containers only, never applied under numbers or other text that needs to stay crisply legible.
+- `src/components/CoinIcon.tsx` — fixed-size icon next to a ticker, backed by local files in `public/coins/*.svg` (sourced once from the CC0 `cryptocurrency-icons` package, not fetched from any CDN at runtime). Falls back to a same-size circle with the ticker's first letter for any symbol without a local file, or if the `<img>` errors — the box size never changes, so layout never shifts. When new tickers get tracked, add an icon file and its lowercase key to `AVAILABLE_ICONS` in that component, or let it fall back intentionally.
+- `src/components/Tooltip.tsx` — custom hover/focus tooltip (not the native `title` attribute), opaque `zinc-900` panel (not glass — legibility over consistency for tooltip text).
 
 ## Data formatting
 

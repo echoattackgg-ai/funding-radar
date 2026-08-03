@@ -6,7 +6,8 @@ import GlassCard from "@/components/GlassCard";
 type Direction = "long" | "short";
 
 const inputClass =
-  "w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-foreground outline-none focus:border-white/30";
+  "w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-foreground outline-none focus:border-orange-400/50";
+const numberInputClass = `${inputClass} font-mono tabular-nums`;
 
 function Field({
   label,
@@ -46,7 +47,7 @@ export default function LiquidationCalculator() {
   }, [positionSize, leverage, entryPrice, direction]);
 
   return (
-    <GlassCard className="w-full max-w-md p-6">
+    <GlassCard variant="accent" className="w-full max-w-md p-6">
       <h2 className="mb-4 text-lg font-medium">
         Liquidation price calculator
       </h2>
@@ -58,7 +59,7 @@ export default function LiquidationCalculator() {
             min="0"
             value={positionSize}
             onChange={(e) => setPositionSize(e.target.value)}
-            className={inputClass}
+            className={numberInputClass}
           />
         </Field>
 
@@ -68,7 +69,7 @@ export default function LiquidationCalculator() {
             min="1"
             value={leverage}
             onChange={(e) => setLeverage(e.target.value)}
-            className={inputClass}
+            className={numberInputClass}
           />
         </Field>
 
@@ -78,7 +79,7 @@ export default function LiquidationCalculator() {
             min="0"
             value={entryPrice}
             onChange={(e) => setEntryPrice(e.target.value)}
-            className={inputClass}
+            className={numberInputClass}
           />
         </Field>
 
@@ -98,7 +99,7 @@ export default function LiquidationCalculator() {
         {result ? (
           <>
             <p className="text-sm text-zinc-400">Liquidation price</p>
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="font-mono text-2xl font-semibold tabular-nums">
               $
               {result.liquidationPrice.toLocaleString("en-US", {
                 maximumFractionDigits: 2,
@@ -107,7 +108,7 @@ export default function LiquidationCalculator() {
             <p className="mt-3 text-sm text-zinc-400">
               The market needs to move against the position by
             </p>
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="font-mono text-2xl font-semibold tabular-nums text-orange-400">
               {result.percentMove.toFixed(2)}%
             </p>
           </>
