@@ -1,6 +1,8 @@
-// Забирает текущую ставку фандинга по BTC с публичных API Binance, Bybit и OKX,
-// приводит к единому виду и считает годовую доходность (APR).
+// Забирает текущие ставки фандинга по списку монет (см. ../supabase/functions/_shared/coins.mjs)
+// с публичных API Binance, Bybit и OKX, приводит к единому виду и считает годовую доходность (APR).
 // Запуск: node scripts/funding-rate.mjs
+
+import { COINS } from "../supabase/functions/_shared/coins.mjs";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -9,64 +11,96 @@ function toApr(ratePercent, intervalHours) {
   return ratePercent * paymentsPerYear;
 }
 
-function formatRow({ биржа, тикер, ratePercent, intervalHours, nextFundingTime }) {
+function formatRow({ exchange, symbol, ticker, ratePercent, intervalHours }) {
   return {
-    биржа,
-    тикер,
-    "ставка, %": ratePercent.toFixed(4),
-    "интервал, ч": intervalHours,
+    exchange,
+    symbol,
+    ticker,
+    "rate, %": ratePercent.toFixed(4),
+    "interval, h": intervalHours,
     "APR, %": toApr(ratePercent, intervalHours).toFixed(2),
-    "следующее начисление": new Date(nextFundingTime).toLocaleString("ru-RU"),
   };
 }
 
-async function getBinance() {
+async function getBinanceRows() {
   const [premiumRes, infoRes] = await Promise.all([
-    fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
+    fetch("https://fapi.binance.com/fapi/v1/premiumIndex"),
     fetch("https://fapi.binance.com/fapi/v1/fundingInfo"),
   ]);
-  const premium = await premiumRes.json();
-  const info = await infoRes.json();
-  const symbolInfo = info.find((item) => item.symbol === "BTCUSDT");
+  const premiumBySymbol = new Map((await premiumRes.json()).map((item) => [item.symbol, item]));
+  const infoBySymbol = new Map((await infoRes.json()).map((item) => [item.symbol, item]));
 
-  return formatRow({
-    биржа: "Binance",
-    тикер: premium.symbol,
-    ratePercent: Number(premium.lastFundingRate) * 100,
-    intervalHours: symbolInfo.fundingIntervalHours,
-    nextFundingTime: Number(premium.nextFundingTime),
-  });
+  const rows = [];
+  for (const coin of COINS) {
+    const premium = premiumBySymbol.get(coin.binance);
+    if (!premium) continue;
+
+    const intervalHours = infoBySymbol.get(coin.binance)?.fundingIntervalHours ?? 8;
+    rows.push(
+      formatRow({
+        exchange: "Binance",
+        symbol: coin.symbol,
+        ticker: premium.symbol,
+        ratePercent: Number(premium.lastFundingRate) * 100,
+        intervalHours,
+      }),
+    );
+  }
+  return rows;
 }
 
-async function getBybit() {
-  const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT");
+async function getBybitRows() {
+  const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
   const data = await res.json();
-  const ticker = data.result.list[0];
+  const bySymbol = new Map(data.result.list.map((item) => [item.symbol, item]));
 
-  return formatRow({
-    биржа: "Bybit",
-    тикер: ticker.symbol,
-    ratePercent: Number(ticker.fundingRate) * 100,
-    intervalHours: Number(ticker.fundingIntervalHour),
-    nextFundingTime: Number(ticker.nextFundingTime),
-  });
+  const rows = [];
+  for (const coin of COINS) {
+    const ticker = bySymbol.get(coin.bybit);
+    if (!ticker) continue;
+
+    rows.push(
+      formatRow({
+        exchange: "Bybit",
+        symbol: coin.symbol,
+        ticker: ticker.symbol,
+        ratePercent: Number(ticker.fundingRate) * 100,
+        intervalHours: Number(ticker.fundingIntervalHour),
+      }),
+    );
+  }
+  return rows;
 }
 
-async function getOkx() {
-  const res = await fetch("https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP");
-  const data = await res.json();
-  const entry = data.data[0];
-  const intervalHours = (Number(entry.nextFundingTime) - Number(entry.fundingTime)) / MS_PER_HOUR;
+async function getOkxRow(coin) {
+  try {
+    const res = await fetch(`https://www.okx.com/api/v5/public/funding-rate?instId=${coin.okx}`);
+    const data = await res.json();
+    const entry = data.data?.[0];
+    if (!entry) return null;
 
-  return formatRow({
-    биржа: "OKX",
-    тикер: entry.instId,
-    ratePercent: Number(entry.fundingRate) * 100,
-    intervalHours,
-    nextFundingTime: Number(entry.nextFundingTime),
-  });
+    const intervalHours = (Number(entry.nextFundingTime) - Number(entry.fundingTime)) / MS_PER_HOUR;
+    return formatRow({
+      exchange: "OKX",
+      symbol: coin.symbol,
+      ticker: entry.instId,
+      ratePercent: Number(entry.fundingRate) * 100,
+      intervalHours,
+    });
+  } catch {
+    return null;
+  }
 }
 
-const results = await Promise.all([getBinance(), getBybit(), getOkx()]);
+async function getOkxRows() {
+  const results = await Promise.all(COINS.map(getOkxRow));
+  return results.filter((row) => row !== null);
+}
 
-console.table(results);
+const [binanceRows, bybitRows, okxRows] = await Promise.all([
+  getBinanceRows(),
+  getBybitRows(),
+  getOkxRows(),
+]);
+
+console.table([...binanceRows, ...bybitRows, ...okxRows]);

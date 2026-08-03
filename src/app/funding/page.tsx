@@ -1,55 +1,17 @@
-import { getLatestFundingRates } from "@/lib/funding-rates";
-import RelativeTime from "@/components/RelativeTime";
+import { getGroupedFundingRates } from "@/lib/funding-rates";
+import FundingRatesTable from "@/components/FundingRatesTable";
 
 export const revalidate = 0;
 
 export default async function FundingPage() {
-  const rows = await getLatestFundingRates();
+  const rows = await getGroupedFundingRates();
 
   return (
     <div className="flex flex-1 flex-col items-center gap-8 px-4 py-12">
       <h1 className="text-4xl font-semibold tracking-tight text-foreground">
         All funding rates
       </h1>
-
-      <div className="w-full max-w-3xl rounded-xl border border-white/10 bg-white/5 p-6">
-        {rows.length === 0 ? (
-          <p className="text-sm text-zinc-400">No data yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-xs text-zinc-400 uppercase">
-                  <th className="pb-2 pr-4 font-medium">Exchange</th>
-                  <th className="pb-2 pr-4 font-medium">Ticker</th>
-                  <th className="pb-2 pr-4 font-medium">Rate</th>
-                  <th className="pb-2 pr-4 font-medium">Interval, h</th>
-                  <th className="pb-2 pr-4 font-medium">APR</th>
-                  <th className="pb-2 font-medium">Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={`${row.exchange}:${row.ticker}`}>
-                    <td className="py-2 pr-4">{row.exchange}</td>
-                    <td className="py-2 pr-4">{row.ticker}</td>
-                    <td className="py-2 pr-4">
-                      {row.rate_percent.toFixed(4)}%
-                    </td>
-                    <td className="py-2 pr-4">{row.interval_hours}</td>
-                    <td className="py-2 pr-4">
-                      {row.apr_percent.toFixed(2)}%
-                    </td>
-                    <td className="py-2 text-zinc-400">
-                      <RelativeTime dateIso={row.fetched_at} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <FundingRatesTable rows={rows} />
     </div>
   );
 }
