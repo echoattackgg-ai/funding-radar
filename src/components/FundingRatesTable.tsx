@@ -1,4 +1,5 @@
 import { getLatestFundingRates } from "@/lib/funding-rates";
+import RelativeTime from "@/components/RelativeTime";
 
 export default async function FundingRatesTable() {
   const rows = await getLatestFundingRates();
@@ -6,8 +7,8 @@ export default async function FundingRatesTable() {
   if (rows.length === 0) {
     return (
       <div className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 p-6">
-        <h2 className="mb-2 text-lg font-medium">Фандинг по биржам</h2>
-        <p className="text-sm text-zinc-400">Данных пока нет.</p>
+        <h2 className="mb-2 text-lg font-medium">Funding rates by exchange</h2>
+        <p className="text-sm text-zinc-400">No data yet.</p>
       </div>
     );
   }
@@ -20,14 +21,14 @@ export default async function FundingRatesTable() {
 
   return (
     <div className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 p-6">
-      <h2 className="mb-4 text-lg font-medium">Фандинг по биржам</h2>
+      <h2 className="mb-4 text-lg font-medium">Funding rates by exchange</h2>
 
       {hasSpread && (
         <div className="mb-4 rounded-lg bg-white/5 p-3">
           <p className="text-sm text-zinc-400">
-            Спред между биржами:{" "}
+            Spread between exchanges:{" "}
             <span className="font-semibold text-foreground">
-              {spread.toFixed(2)} п.п.
+              {spread.toFixed(2)} pp
             </span>
           </p>
         </div>
@@ -37,11 +38,12 @@ export default async function FundingRatesTable() {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="text-xs text-zinc-400 uppercase">
-              <th className="pb-2 pr-4 font-medium">Биржа</th>
-              <th className="pb-2 pr-4 font-medium">Тикер</th>
-              <th className="pb-2 pr-4 font-medium">Ставка, %</th>
-              <th className="pb-2 pr-4 font-medium">Интервал, ч</th>
-              <th className="pb-2 font-medium">APR, %</th>
+              <th className="pb-2 pr-4 font-medium">Exchange</th>
+              <th className="pb-2 pr-4 font-medium">Ticker</th>
+              <th className="pb-2 pr-4 font-medium">Rate, %</th>
+              <th className="pb-2 pr-4 font-medium">Interval, h</th>
+              <th className="pb-2 pr-4 font-medium">APR, %</th>
+              <th className="pb-2 font-medium">Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -64,8 +66,11 @@ export default async function FundingRatesTable() {
                   <td className="py-2 pr-4">{row.ticker}</td>
                   <td className="py-2 pr-4">{row.rate_percent.toFixed(4)}</td>
                   <td className="py-2 pr-4">{row.interval_hours}</td>
-                  <td className="py-2 font-medium">
+                  <td className="py-2 pr-4 font-medium">
                     {row.apr_percent.toFixed(2)}
+                  </td>
+                  <td className="py-2 text-zinc-400">
+                    <RelativeTime dateIso={row.fetched_at} />
                   </td>
                 </tr>
               );

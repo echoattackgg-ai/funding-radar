@@ -9,23 +9,23 @@ export default async function FundingPage() {
   return (
     <div className="flex flex-1 flex-col items-center gap-8 px-4 py-12">
       <h1 className="text-4xl font-semibold tracking-tight text-foreground">
-        Все ставки фандинга
+        All funding rates
       </h1>
 
       <div className="w-full max-w-3xl rounded-xl border border-white/10 bg-white/5 p-6">
         {rows.length === 0 ? (
-          <p className="text-sm text-zinc-400">Данных пока нет.</p>
+          <p className="text-sm text-zinc-400">No data yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-xs text-zinc-400 uppercase">
-                  <th className="pb-2 pr-4 font-medium">Биржа</th>
-                  <th className="pb-2 pr-4 font-medium">Тикер</th>
-                  <th className="pb-2 pr-4 font-medium">Ставка</th>
-                  <th className="pb-2 pr-4 font-medium">Интервал, ч</th>
+                  <th className="pb-2 pr-4 font-medium">Exchange</th>
+                  <th className="pb-2 pr-4 font-medium">Ticker</th>
+                  <th className="pb-2 pr-4 font-medium">Rate</th>
+                  <th className="pb-2 pr-4 font-medium">Interval, h</th>
                   <th className="pb-2 pr-4 font-medium">APR</th>
-                  <th className="pb-2 font-medium">Обновлено</th>
+                  <th className="pb-2 font-medium">Updated</th>
                 </tr>
               </thead>
               <tbody>

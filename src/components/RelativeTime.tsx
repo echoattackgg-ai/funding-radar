@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-const rtf = new Intl.RelativeTimeFormat("ru", { numeric: "auto" });
+const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
 function formatRelative(diffMs: number): string {
   const diffSec = Math.round(diffMs / 1000);
 
-  if (diffSec < 60) return "только что";
+  if (diffSec < 60) return "just now";
 
   const diffMin = Math.round(diffSec / 60);
   if (diffMin < 60) return rtf.format(-diffMin, "minute");
@@ -19,9 +19,18 @@ function formatRelative(diffMs: number): string {
   return rtf.format(-diffDay, "day");
 }
 
+const absoluteUtcFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 function formatAbsoluteUtc(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getUTCDate())}.${pad(date.getUTCMonth() + 1)}.${date.getUTCFullYear()} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
+  return `${absoluteUtcFormatter.format(date)} UTC`;
 }
 
 export default function RelativeTime({ dateIso }: { dateIso: string }) {

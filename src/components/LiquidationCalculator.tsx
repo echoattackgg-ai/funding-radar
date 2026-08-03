@@ -47,11 +47,11 @@ export default function LiquidationCalculator() {
   return (
     <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
       <h2 className="mb-4 text-lg font-medium">
-        Калькулятор цены ликвидации
+        Liquidation price calculator
       </h2>
 
       <div className="space-y-4">
-        <Field label="Размер позиции, USD">
+        <Field label="Position size, USD">
           <input
             type="number"
             min="0"
@@ -61,7 +61,7 @@ export default function LiquidationCalculator() {
           />
         </Field>
 
-        <Field label="Плечо (x)">
+        <Field label="Leverage (x)">
           <input
             type="number"
             min="1"
@@ -71,7 +71,7 @@ export default function LiquidationCalculator() {
           />
         </Field>
 
-        <Field label="Цена входа, USD">
+        <Field label="Entry price, USD">
           <input
             type="number"
             min="0"
@@ -81,7 +81,7 @@ export default function LiquidationCalculator() {
           />
         </Field>
 
-        <Field label="Направление">
+        <Field label="Direction">
           <select
             value={direction}
             onChange={(e) => setDirection(e.target.value as Direction)}
@@ -96,15 +96,15 @@ export default function LiquidationCalculator() {
       <div className="mt-6 rounded-lg bg-white/5 p-4">
         {result ? (
           <>
-            <p className="text-sm text-zinc-400">Цена ликвидации</p>
+            <p className="text-sm text-zinc-400">Liquidation price</p>
             <p className="text-2xl font-semibold">
               $
-              {result.liquidationPrice.toLocaleString("ru-RU", {
+              {result.liquidationPrice.toLocaleString("en-US", {
                 maximumFractionDigits: 2,
               })}
             </p>
             <p className="mt-3 text-sm text-zinc-400">
-              Рынок должен пойти против позиции на
+              The market needs to move against the position by
             </p>
             <p className="text-2xl font-semibold">
               {result.percentMove.toFixed(2)}%
@@ -112,7 +112,7 @@ export default function LiquidationCalculator() {
           </>
         ) : (
           <p className="text-sm text-zinc-400">
-            Заполните поля выше корректными значениями.
+            Fill in the fields above with valid values.
           </p>
         )}
       </div>
@@ -128,17 +128,17 @@ export default function LiquidationCalculator() {
         />
         <div className="relative">
           <p className="mb-2 text-xs font-medium tracking-wide text-zinc-300 uppercase">
-            Формула расчёта
+            Calculation formula
           </p>
           <p className="font-mono text-xs leading-relaxed text-zinc-300">
-            Изолированная маржа, упрощённо — без комиссий и ставки
-            поддерживающей маржи:
+            Isolated margin, simplified — no fees, no maintenance margin
+            rate:
             <br />
-            Long: Цена_ликв = Цена_входа × (1 − 1 / Плечо)
+            Long: Liq_price = Entry_price × (1 − 1 / Leverage)
             <br />
-            Short: Цена_ликв = Цена_входа × (1 + 1 / Плечо)
+            Short: Liq_price = Entry_price × (1 + 1 / Leverage)
             <br />
-            Движение против позиции = 100 / Плечо, %
+            Move against position = 100 / Leverage, %
           </p>
         </div>
       </div>
