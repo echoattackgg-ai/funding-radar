@@ -16,8 +16,18 @@ const EXCHANGES: ExchangeName[] = ["Binance", "Bybit", "OKX"];
 const BASE_RATE_PERCENT = 0.01;
 const EPSILON = 1e-9;
 
+// На мобильном полный список — это бесконечный скролл карточек, а самые
+// интересные строки и так наверху (сортировка по умолчанию — по спреду).
+const MOBILE_DEFAULT_VISIBLE = 10;
+
 type SortKey = "symbol" | ExchangeName | "spread";
 type SortDirection = "asc" | "desc";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "symbol", label: "Coin" },
+  ...EXCHANGES.map((exchange) => ({ key: exchange, label: exchange })),
+  { key: "spread", label: "Spread" },
+];
 
 function sortValue(row: GroupedFundingRate, key: SortKey): number | string {
   if (key === "symbol") return row.symbol;
@@ -38,6 +48,33 @@ function isUninformativeRow(row: GroupedFundingRate): boolean {
   if (present.length < 2) return false;
 
   return present.every((cell) => Math.abs(cell.rate_percent - BASE_RATE_PERCENT) < EPSILON);
+}
+
+function computeRowMeta(row: GroupedFundingRate) {
+  const present = EXCHANGES.map((exchange) => row.rates[exchange]).filter(
+    (cell): cell is FundingRateRow => !!cell,
+  );
+  const showHighlight = hasVisibleSpread(row);
+  const maxApr = showHighlight ? Math.max(...present.map((c) => c.apr_percent)) : null;
+  const minApr = showHighlight ? Math.min(...present.map((c) => c.apr_percent)) : null;
+  return { present, showHighlight, maxApr, minApr };
+}
+
+function ExternalLinkIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M7 17 17 7M9 7h8v8" />
+    </svg>
+  );
 }
 
 function SortableHeader({
@@ -74,24 +111,114 @@ function SortableHeader({
           className="inline-flex items-center gap-0.5 text-sky-400/90 underline decoration-dotted underline-offset-2 hover:text-sky-300"
         >
           {label}
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            className="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M7 17 17 7M9 7h8v8" />
-          </svg>
+          <ExternalLinkIcon />
         </a>
       ) : (
         label
       )}
       {active && <span className="ml-1 text-zinc-500">{sortDirection === "asc" ? "▲" : "▼"}</span>}
     </th>
+  );
+}
+
+function MobileSortBar({
+  sortKey,
+  sortDirection,
+  onSort,
+}: {
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Sort rates"
+      className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 sm:hidden"
+    >
+      {SORT_OPTIONS.map((option) => {
+        const active = sortKey === option.key;
+        return (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => onSort(option.key)}
+            className={`shrink-0 rounded-full border px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+              active
+                ? "border-sky-400/40 bg-sky-500/15 text-sky-300"
+                : "border-white/10 bg-white/5 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {option.label}
+            {active && <span className="ml-1">{sortDirection === "asc" ? "▲" : "▼"}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FundingRateCard({ row }: { row: GroupedFundingRate }) {
+  const { present, showHighlight, maxApr, minApr } = computeRowMeta(row);
+  const orderedPresent = [...present].sort((a, b) => b.apr_percent - a.apr_percent);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <div className="flex items-center justify-between gap-3 px-1 pb-2">
+        <span className="text-lg font-semibold">{row.symbol}</span>
+        <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-sm font-semibold tabular-nums text-sky-300">
+          {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
+        </span>
+      </div>
+      <div className="divide-y divide-white/5">
+        {orderedPresent.map((cell) => {
+          const isMax = showHighlight && cell.apr_percent === maxApr;
+          const isMin = showHighlight && cell.apr_percent === minApr;
+          const href = AFFILIATE_LINKS[cell.exchange];
+
+          const rowClasses =
+            "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors" +
+            (isMax
+              ? " bg-green-500/10 text-green-400"
+              : isMin
+                ? " bg-red-500/10 text-red-400"
+                : "");
+
+          const content = (
+            <>
+              <span className="inline-flex items-center gap-1 font-medium">
+                {cell.exchange}
+                {href && <ExternalLinkIcon />}
+              </span>
+              <span className="text-right">
+                <span className="block text-base font-semibold tabular-nums">
+                  {cell.apr_percent.toFixed(2)}%
+                </span>
+                <span className="block text-xs tabular-nums text-zinc-500/80">
+                  {cell.rate_percent.toFixed(4)}% · {cell.interval_hours}h
+                </span>
+              </span>
+            </>
+          );
+
+          return href ? (
+            <a
+              key={cell.exchange}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${rowClasses} hover:bg-white/5`}
+            >
+              {content}
+            </a>
+          ) : (
+            <div key={cell.exchange} className={rowClasses}>
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -108,6 +235,7 @@ export default function FundingRatesTable({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("spread");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [mobileExpanded, setMobileExpanded] = useState(false);
 
   const sortedRows = useMemo(() => {
     const copy = [...rows];
@@ -128,6 +256,13 @@ export default function FundingRatesTable({
   }, [rows, sortKey, sortDirection]);
 
   const visibleRows = limit ? sortedRows.slice(0, limit) : sortedRows;
+  const mobileVisibleRows = limit
+    ? visibleRows
+    : mobileExpanded
+      ? sortedRows
+      : sortedRows.slice(0, MOBILE_DEFAULT_VISIBLE);
+  const showMobileExpandButton =
+    !limit && !mobileExpanded && sortedRows.length > MOBILE_DEFAULT_VISIBLE;
 
   const latestUpdatedAt = useMemo(
     () =>
@@ -179,7 +314,7 @@ export default function FundingRatesTable({
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-left text-sm tabular-nums">
           <thead>
             <tr className="text-xs text-zinc-400 uppercase">
@@ -214,12 +349,7 @@ export default function FundingRatesTable({
           </thead>
           <tbody className="divide-y divide-white/5">
             {visibleRows.map((row) => {
-              const present = EXCHANGES.map((exchange) => row.rates[exchange]).filter(
-                (cell): cell is FundingRateRow => !!cell,
-              );
-              const showHighlight = hasVisibleSpread(row);
-              const maxApr = showHighlight ? Math.max(...present.map((c) => c.apr_percent)) : null;
-              const minApr = showHighlight ? Math.min(...present.map((c) => c.apr_percent)) : null;
+              const { maxApr, minApr } = computeRowMeta(row);
 
               return (
                 <tr key={row.symbol} className="transition-colors hover:bg-white/5">
@@ -269,6 +399,24 @@ export default function FundingRatesTable({
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="sm:hidden">
+        <MobileSortBar sortKey={sortKey} sortDirection={sortDirection} onSort={toggleSort} />
+        <div className="space-y-3">
+          {mobileVisibleRows.map((row) => (
+            <FundingRateCard key={row.symbol} row={row} />
+          ))}
+        </div>
+        {showMobileExpandButton && (
+          <button
+            type="button"
+            onClick={() => setMobileExpanded(true)}
+            className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/10"
+          >
+            Show all ({sortedRows.length})
+          </button>
+        )}
       </div>
 
       {limit && seeAllHref && rows.length > limit && (
