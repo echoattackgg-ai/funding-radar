@@ -14,7 +14,12 @@ type Row = {
   rate_percent: number;
   interval_hours: number;
   apr_percent: number;
+  next_funding_at: string;
+  last_paid_rate_percent: number | null;
+  last_paid_at: string | null;
 };
+
+type LastPaid = { rate: number; at: string };
 
 function toApr(ratePercent: number, intervalHours: number) {
   const paymentsPerYear = (24 / intervalHours) * 365;
@@ -25,7 +30,7 @@ function toApr(ratePercent: number, intervalHours: number) {
 // забираем всё сразу и потом фильтруем под наш список монет, вместо
 // отдельного запроса на каждую монету.
 
-async function getBinanceRows(): Promise<Row[]> {
+async function getBinanceRows(lastPaidByTicker: Map<string, LastPaid>): Promise<Row[]> {
   const [premiumRes, infoRes] = await Promise.all([
     fetch("https://fapi.binance.com/fapi/v1/premiumIndex"),
     fetch("https://fapi.binance.com/fapi/v1/fundingInfo"),
@@ -40,7 +45,7 @@ async function getBinanceRows(): Promise<Row[]> {
   const rows: Row[] = [];
   for (const coin of COINS) {
     const premium = premiumBySymbol.get(coin.binance) as
-      | { lastFundingRate: string; symbol: string }
+      | { lastFundingRate: string; symbol: string; nextFundingTime: number }
       | undefined;
     if (!premium) continue;
 
@@ -49,6 +54,7 @@ async function getBinanceRows(): Promise<Row[]> {
       | undefined;
     const intervalHours = info?.fundingIntervalHours ?? 8;
     const ratePercent = Number(premium.lastFundingRate) * 100;
+    const lastPaid = lastPaidByTicker.get(coin.binance);
 
     rows.push({
       exchange: "Binance",
@@ -57,12 +63,15 @@ async function getBinanceRows(): Promise<Row[]> {
       rate_percent: ratePercent,
       interval_hours: intervalHours,
       apr_percent: toApr(ratePercent, intervalHours),
+      next_funding_at: new Date(premium.nextFundingTime).toISOString(),
+      last_paid_rate_percent: lastPaid?.rate ?? null,
+      last_paid_at: lastPaid?.at ?? null,
     });
   }
   return rows;
 }
 
-async function getBybitRows(): Promise<Row[]> {
+async function getBybitRows(lastPaidByTicker: Map<string, LastPaid>): Promise<Row[]> {
   const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
   const data = await res.json();
   const bySymbol = new Map(
@@ -72,12 +81,13 @@ async function getBybitRows(): Promise<Row[]> {
   const rows: Row[] = [];
   for (const coin of COINS) {
     const ticker = bySymbol.get(coin.bybit) as
-      | { fundingRate: string; fundingIntervalHour: string; symbol: string }
+      | { fundingRate: string; fundingIntervalHour: string; symbol: string; nextFundingTime: string }
       | undefined;
     if (!ticker) continue;
 
     const ratePercent = Number(ticker.fundingRate) * 100;
     const intervalHours = Number(ticker.fundingIntervalHour);
+    const lastPaid = lastPaidByTicker.get(coin.bybit);
 
     rows.push({
       exchange: "Bybit",
@@ -86,6 +96,9 @@ async function getBybitRows(): Promise<Row[]> {
       rate_percent: ratePercent,
       interval_hours: intervalHours,
       apr_percent: toApr(ratePercent, intervalHours),
+      next_funding_at: new Date(Number(ticker.nextFundingTime)).toISOString(),
+      last_paid_rate_percent: lastPaid?.rate ?? null,
+      last_paid_at: lastPaid?.at ?? null,
     });
   }
   return rows;
@@ -94,6 +107,10 @@ async function getBybitRows(): Promise<Row[]> {
 // OKX не отдаёт ставки по всем инструментам одним запросом — нужен отдельный
 // запрос на каждую монету. Делаем их параллельно и пропускаем те, что упали
 // (монеты может не быть на бирже, или запрос мог не выполниться).
+//
+// В этом же ответе OKX присылает и последнюю уже выплаченную ставку
+// (settFundingRate/prevFundingTime) — отдельный запрос истории, в отличие
+// от Binance и Bybit, не нужен.
 
 async function getOkxRow(coin: (typeof COINS)[number]): Promise<Row | null> {
   try {
@@ -105,8 +122,15 @@ async function getOkxRow(coin: (typeof COINS)[number]): Promise<Row | null> {
     if (!entry) return null;
 
     const ratePercent = Number(entry.fundingRate) * 100;
-    const intervalHours =
-      (Number(entry.nextFundingTime) - Number(entry.fundingTime)) / MS_PER_HOUR;
+    const prevFundingTime = Number(entry.prevFundingTime);
+    // Длина текущего (ещё не выплаченного) интервала — от предыдущей выплаты
+    // до следующей. Раньше здесь ошибочно бралась длина СЛЕДУЮЩего интервала
+    // (nextFundingTime - fundingTime), что обычно совпадает, но не гарантированно.
+    const intervalHours = Number.isFinite(prevFundingTime)
+      ? (Number(entry.fundingTime) - prevFundingTime) / MS_PER_HOUR
+      : (Number(entry.nextFundingTime) - Number(entry.fundingTime)) / MS_PER_HOUR;
+
+    const hasSettlement = entry.settState === "settled" && entry.settFundingRate;
 
     return {
       exchange: "OKX",
@@ -115,6 +139,11 @@ async function getOkxRow(coin: (typeof COINS)[number]): Promise<Row | null> {
       rate_percent: ratePercent,
       interval_hours: intervalHours,
       apr_percent: toApr(ratePercent, intervalHours),
+      next_funding_at: new Date(Number(entry.fundingTime)).toISOString(),
+      last_paid_rate_percent: hasSettlement ? Number(entry.settFundingRate) * 100 : null,
+      last_paid_at: hasSettlement && Number.isFinite(prevFundingTime)
+        ? new Date(prevFundingTime).toISOString()
+        : null,
     };
   } catch {
     return null;
@@ -126,15 +155,88 @@ async function getOkxRows(): Promise<Row[]> {
   return results.filter((row): row is Row => row !== null);
 }
 
+// Последняя фактически выплаченная ставка для Binance/Bybit требует
+// отдельного запроса истории на каждую монету. Это дополнительные данные,
+// не критичные для основной таблицы, поэтому падение или лимит частоты на
+// этих запросах не должны мешать записи текущих (прогнозных) ставок — каждый
+// запрос обёрнут в свой try/catch, а сбои только логируются.
+
+async function getBinanceLastPaidRates(): Promise<Map<string, LastPaid>> {
+  const results = new Map<string, LastPaid>();
+  await Promise.all(
+    COINS.map(async (coin) => {
+      try {
+        const res = await fetch(
+          `https://fapi.binance.com/fapi/v1/fundingRate?symbol=${coin.binance}&limit=1`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const entry = data[0] as { fundingRate: string; fundingTime: number } | undefined;
+        if (!entry) return;
+        results.set(coin.binance, {
+          rate: Number(entry.fundingRate) * 100,
+          at: new Date(entry.fundingTime).toISOString(),
+        });
+      } catch (err) {
+        console.error(
+          `[collect-funding-rates] Binance last-paid-rate fetch failed for ${coin.symbol}:`,
+          err,
+        );
+      }
+    }),
+  );
+  return results;
+}
+
+async function getBybitLastPaidRates(): Promise<Map<string, LastPaid>> {
+  const results = new Map<string, LastPaid>();
+  await Promise.all(
+    COINS.map(async (coin) => {
+      try {
+        const res = await fetch(
+          `https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${coin.bybit}&limit=1`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const entry = data.result?.list?.[0] as
+          | { fundingRate: string; fundingRateTimestamp: string }
+          | undefined;
+        if (!entry) return;
+        results.set(coin.bybit, {
+          rate: Number(entry.fundingRate) * 100,
+          at: new Date(Number(entry.fundingRateTimestamp)).toISOString(),
+        });
+      } catch (err) {
+        console.error(
+          `[collect-funding-rates] Bybit last-paid-rate fetch failed for ${coin.symbol}:`,
+          err,
+        );
+      }
+    }),
+  );
+  return results;
+}
+
 Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SERVICE_KEY")!,
   );
 
+  let binanceLastPaid = new Map<string, LastPaid>();
+  let bybitLastPaid = new Map<string, LastPaid>();
+  try {
+    [binanceLastPaid, bybitLastPaid] = await Promise.all([
+      getBinanceLastPaidRates(),
+      getBybitLastPaidRates(),
+    ]);
+  } catch (err) {
+    console.error("[collect-funding-rates] last-paid-rate enrichment failed entirely:", err);
+  }
+
   const [binanceRows, bybitRows, okxRows] = await Promise.all([
-    getBinanceRows(),
-    getBybitRows(),
+    getBinanceRows(binanceLastPaid),
+    getBybitRows(bybitLastPaid),
     getOkxRows(),
   ]);
   const rows = [...binanceRows, ...bybitRows, ...okxRows];

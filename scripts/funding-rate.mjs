@@ -11,7 +11,20 @@ function toApr(ratePercent, intervalHours) {
   return ratePercent * paymentsPerYear;
 }
 
-function formatRow({ exchange, symbol, ticker, ratePercent, intervalHours }) {
+// То же правило зрелости прогноза, что и на сайте (см. src/lib/funding-rates.ts):
+// меньше четверти интервала прошло — значение ещё скачет.
+function formatMaturity(nextFundingAtMs, intervalHours) {
+  const totalMs = intervalHours * MS_PER_HOUR;
+  const elapsedMs = Math.max(0, Date.now() - (nextFundingAtMs - totalMs));
+  const elapsedMin = Math.round(elapsedMs / 60000);
+  const totalMin = Math.round(totalMs / 60000);
+  const fraction = totalMs > 0 ? elapsedMs / totalMs : 1;
+  const label = elapsedMin >= 60 ? `${(elapsedMin / 60).toFixed(1)}h` : `${elapsedMin}m`;
+  const totalLabel = totalMin >= 60 ? `${(totalMin / 60).toFixed(1)}h` : `${totalMin}m`;
+  return `${label} / ${totalLabel}${fraction < 0.25 ? " (unreliable)" : ""}`;
+}
+
+function formatRow({ exchange, symbol, ticker, ratePercent, intervalHours, nextFundingAtMs, lastPaid }) {
   return {
     exchange,
     symbol,
@@ -19,10 +32,57 @@ function formatRow({ exchange, symbol, ticker, ratePercent, intervalHours }) {
     "rate, %": ratePercent.toFixed(4),
     "interval, h": intervalHours,
     "APR, %": toApr(ratePercent, intervalHours).toFixed(2),
+    maturity: formatMaturity(nextFundingAtMs, intervalHours),
+    "last paid, %": lastPaid !== null && lastPaid !== undefined ? lastPaid.toFixed(4) : "—",
   };
 }
 
-async function getBinanceRows() {
+// Последняя фактически выплаченная ставка требует отдельного запроса истории
+// на каждую монету (для Binance и Bybit — OKX отдаёт её в основном запросе).
+// Обёрнуто отдельно от основного сбора: если история не отдалась, в таблице
+// просто будет "—" в этой колонке, а не упавший скрипт.
+
+async function getBinanceLastPaidRates() {
+  const results = new Map();
+  await Promise.all(
+    COINS.map(async (coin) => {
+      try {
+        const res = await fetch(
+          `https://fapi.binance.com/fapi/v1/fundingRate?symbol=${coin.binance}&limit=1`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const entry = data[0];
+        if (entry) results.set(coin.binance, Number(entry.fundingRate) * 100);
+      } catch (err) {
+        console.error(`Binance last-paid-rate fetch failed for ${coin.symbol}:`, err.message);
+      }
+    }),
+  );
+  return results;
+}
+
+async function getBybitLastPaidRates() {
+  const results = new Map();
+  await Promise.all(
+    COINS.map(async (coin) => {
+      try {
+        const res = await fetch(
+          `https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${coin.bybit}&limit=1`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const entry = data.result?.list?.[0];
+        if (entry) results.set(coin.bybit, Number(entry.fundingRate) * 100);
+      } catch (err) {
+        console.error(`Bybit last-paid-rate fetch failed for ${coin.symbol}:`, err.message);
+      }
+    }),
+  );
+  return results;
+}
+
+async function getBinanceRows(lastPaidByTicker) {
   const [premiumRes, infoRes] = await Promise.all([
     fetch("https://fapi.binance.com/fapi/v1/premiumIndex"),
     fetch("https://fapi.binance.com/fapi/v1/fundingInfo"),
@@ -43,13 +103,15 @@ async function getBinanceRows() {
         ticker: premium.symbol,
         ratePercent: Number(premium.lastFundingRate) * 100,
         intervalHours,
+        nextFundingAtMs: Number(premium.nextFundingTime),
+        lastPaid: lastPaidByTicker.get(coin.binance),
       }),
     );
   }
   return rows;
 }
 
-async function getBybitRows() {
+async function getBybitRows(lastPaidByTicker) {
   const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
   const data = await res.json();
   const bySymbol = new Map(data.result.list.map((item) => [item.symbol, item]));
@@ -66,6 +128,8 @@ async function getBybitRows() {
         ticker: ticker.symbol,
         ratePercent: Number(ticker.fundingRate) * 100,
         intervalHours: Number(ticker.fundingIntervalHour),
+        nextFundingAtMs: Number(ticker.nextFundingTime),
+        lastPaid: lastPaidByTicker.get(coin.bybit),
       }),
     );
   }
@@ -79,13 +143,19 @@ async function getOkxRow(coin) {
     const entry = data.data?.[0];
     if (!entry) return null;
 
-    const intervalHours = (Number(entry.nextFundingTime) - Number(entry.fundingTime)) / MS_PER_HOUR;
+    const prevFundingTime = Number(entry.prevFundingTime);
+    const intervalHours = Number.isFinite(prevFundingTime)
+      ? (Number(entry.fundingTime) - prevFundingTime) / MS_PER_HOUR
+      : (Number(entry.nextFundingTime) - Number(entry.fundingTime)) / MS_PER_HOUR;
+
     return formatRow({
       exchange: "OKX",
       symbol: coin.symbol,
       ticker: entry.instId,
       ratePercent: Number(entry.fundingRate) * 100,
       intervalHours,
+      nextFundingAtMs: Number(entry.fundingTime),
+      lastPaid: entry.settState === "settled" ? Number(entry.settFundingRate) * 100 : undefined,
     });
   } catch {
     return null;
@@ -97,9 +167,14 @@ async function getOkxRows() {
   return results.filter((row) => row !== null);
 }
 
+const [binanceLastPaid, bybitLastPaid] = await Promise.all([
+  getBinanceLastPaidRates(),
+  getBybitLastPaidRates(),
+]);
+
 const [binanceRows, bybitRows, okxRows] = await Promise.all([
-  getBinanceRows(),
-  getBybitRows(),
+  getBinanceRows(binanceLastPaid),
+  getBybitRows(bybitLastPaid),
   getOkxRows(),
 ]);
 

@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { ExchangeName, FundingRateRow, GroupedFundingRate } from "@/lib/funding-rates";
+import {
+  IMMATURE_FRACTION_THRESHOLD,
+  type ExchangeName,
+  type FundingRateRow,
+  type GroupedFundingRate,
+  type Maturity,
+} from "@/lib/funding-rates";
 import { AFFILIATE_LINKS } from "@/lib/affiliate-links";
 import RelativeTime from "@/components/RelativeTime";
 import GlassCard from "@/components/GlassCard";
@@ -50,6 +56,104 @@ function isUninformativeRow(row: GroupedFundingRate): boolean {
   if (present.length < 2) return false;
 
   return present.every((cell) => Math.abs(cell.rate_percent - BASE_RATE_PERCENT) < EPSILON);
+}
+
+// Приоритет строк при сортировке: обычные строки наверх, затем строки, где
+// биржи разошлись по фазе интервала (спред между "устоявшейся" и "только что
+// открывшейся" биржей может быть фантомным), затем неинформативные (везде одна
+// и та же базовая ставка). Если рано ВСЕ биржи разом — это не повод понижать
+// строку, это свойство момента, а не конкретной пары (см. StabilityBanner).
+function rowTier(row: GroupedFundingRate): number {
+  if (isUninformativeRow(row)) return 2;
+  if (row.hasPhaseDivergence) return 1;
+  return 0;
+}
+
+function formatDuration(ms: number): string {
+  const totalMinutes = Math.round(ms / 60000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours}h` : `${hours}h${minutes}m`;
+}
+
+function formatMaturity(maturity: Maturity): string {
+  return `${formatDuration(maturity.elapsedMs)} / ${formatDuration(maturity.totalMs)}`;
+}
+
+function cellTooltipContent(cell: FundingRateRow): string {
+  const base = `${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`;
+  if (!cell.maturity) return base;
+
+  const progress = `${formatMaturity(cell.maturity)} into this interval`;
+  return cell.maturity.isImmature
+    ? `${base} · ${progress} — too early, forecast may still change`
+    : `${base} · ${progress}`;
+}
+
+// Всегда видимый значок (не только по наведению — важно для мобильных карточек,
+// где ховера нет), с подсказкой-подробностью для тех, кто может её увидеть.
+// Показывается ТОЛЬКО на строках с расхождением фаз (rowTier === 1) — если
+// пометить рано абсолютно всё, пометка перестаёт что-либо означать.
+function MaturityBadge({ maturity }: { maturity: Maturity }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/30 bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-orange-400">
+      early · {formatMaturity(maturity)}
+    </span>
+  );
+}
+
+// "Момент" — общее свойство всего среза данных, а не отдельной строки: если
+// биржи используют один и тот же стандартный интервал (обычно 8ч, синхронно
+// по UTC), они почти всегда стартуют и созревают одновременно. Берём самую
+// частую длину интервала среди всех загруженных ячеек и самое частое время
+// следующей выплаты внутри неё — это и есть "текущий цикл" сайта.
+function computeGlobalMaturity(rows: GroupedFundingRate[]): Maturity | null {
+  const cells = rows.flatMap((row) =>
+    EXCHANGES.map((exchange) => row.rates[exchange]).filter(
+      (cell): cell is FundingRateRow => !!cell && !!cell.maturity,
+    ),
+  );
+  if (cells.length === 0) return null;
+
+  const countByHours = new Map<number, number>();
+  for (const cell of cells) {
+    countByHours.set(cell.interval_hours, (countByHours.get(cell.interval_hours) ?? 0) + 1);
+  }
+  const [dominantHours] = [...countByHours.entries()].sort((a, b) => b[1] - a[1])[0];
+  const dominantCells = cells.filter((cell) => cell.interval_hours === dominantHours);
+
+  const countByNextFunding = new Map<string, number>();
+  for (const cell of dominantCells) {
+    const key = cell.next_funding_at!;
+    countByNextFunding.set(key, (countByNextFunding.get(key) ?? 0) + 1);
+  }
+  const [dominantNextFunding] = [...countByNextFunding.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  return dominantCells.find((cell) => cell.next_funding_at === dominantNextFunding)!.maturity;
+}
+
+// Непрерывное затухание вместо жёсткого включения/выключения на 25% — плавно
+// уходит в 0 к порогу, а не обрывается разом (см. обсуждение: резкий переход
+// по всей таблице выглядел как сбой).
+function cautionIntensity(fraction: number): number {
+  return Math.max(0, Math.min(1, (IMMATURE_FRACTION_THRESHOLD - fraction) / IMMATURE_FRACTION_THRESHOLD));
+}
+
+function StabilityBanner({ maturity }: { maturity: Maturity }) {
+  const intensity = cautionIntensity(maturity.fraction);
+  return (
+    <p className="mb-4 text-xs text-zinc-400">
+      {formatMaturity(maturity)} into the current funding window.{" "}
+      <span
+        className="font-medium text-orange-400"
+        style={{ opacity: intensity }}
+        aria-hidden={intensity === 0}
+      >
+        Interval just reset — early forecasts can still swing; treat fresh spreads with caution.
+      </span>
+    </p>
+  );
 }
 
 function computeRowMeta(row: GroupedFundingRate) {
@@ -171,8 +275,15 @@ function FundingRateCard({ row }: { row: GroupedFundingRate }) {
           <CoinIcon symbol={row.symbol} size={22} />
           {row.symbol}
         </span>
-        <span className="rounded-full bg-orange-500/15 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums text-orange-400">
-          {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
+        <span className="flex flex-col items-end gap-1">
+          <span className="rounded-full bg-orange-500/15 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums text-orange-400">
+            {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
+          </span>
+          {row.hasPhaseDivergence && (
+            <span className="text-[10px] font-medium whitespace-nowrap text-orange-400">
+              exchanges out of sync
+            </span>
+          )}
         </span>
       </div>
       <div className="divide-y divide-white/5">
@@ -195,13 +306,16 @@ function FundingRateCard({ row }: { row: GroupedFundingRate }) {
                 {cell.exchange}
                 {href && <ExternalLinkIcon />}
               </span>
-              <span className="text-right">
+              <span className="flex flex-col items-end gap-0.5 text-right">
                 <span className="block font-mono text-base font-semibold tabular-nums">
                   {cell.apr_percent.toFixed(2)}%
                 </span>
                 <span className="block font-mono text-xs tabular-nums text-zinc-400">
                   {cell.rate_percent.toFixed(4)}% · {cell.interval_hours}h
                 </span>
+                {row.hasPhaseDivergence && cell.maturity?.isImmature && (
+                  <MaturityBadge maturity={cell.maturity} />
+                )}
               </span>
             </>
           );
@@ -245,9 +359,9 @@ export default function FundingRatesTable({
   const sortedRows = useMemo(() => {
     const copy = [...rows];
     copy.sort((a, b) => {
-      const aBoring = isUninformativeRow(a);
-      const bBoring = isUninformativeRow(b);
-      if (aBoring !== bBoring) return aBoring ? 1 : -1;
+      const aTier = rowTier(a);
+      const bTier = rowTier(b);
+      if (aTier !== bTier) return aTier - bTier;
 
       const aValue = sortValue(a, sortKey);
       const bValue = sortValue(b, sortKey);
@@ -277,6 +391,8 @@ export default function FundingRatesTable({
       ),
     [rows],
   );
+
+  const globalMaturity = useMemo(() => computeGlobalMaturity(rows), [rows]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -318,6 +434,8 @@ export default function FundingRatesTable({
           </p>
         )}
       </div>
+
+      {globalMaturity && <StabilityBanner maturity={globalMaturity} />}
 
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-left text-sm tabular-nums">
@@ -382,16 +500,19 @@ export default function FundingRatesTable({
                         }
                       >
                         {cell ? (
-                          <Tooltip
-                            content={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}
-                          >
-                            <span className="inline-flex w-full items-baseline justify-end gap-1 font-mono whitespace-nowrap">
-                              <span className="inline-block w-[8ch] text-right text-base font-semibold tabular-nums">
-                                {cell.apr_percent.toFixed(2)}%
+                          <Tooltip content={cellTooltipContent(cell)}>
+                            <span className="inline-flex w-full flex-col items-end gap-0.5 font-mono whitespace-nowrap">
+                              <span className="inline-flex items-baseline gap-1">
+                                <span className="inline-block w-[8ch] text-right text-base font-semibold tabular-nums">
+                                  {cell.apr_percent.toFixed(2)}%
+                                </span>
+                                <span className="inline-block w-[11ch] text-right text-xs text-zinc-400 tabular-nums">
+                                  ({cell.rate_percent.toFixed(4)}%)
+                                </span>
                               </span>
-                              <span className="inline-block w-[11ch] text-right text-xs text-zinc-400 tabular-nums">
-                                ({cell.rate_percent.toFixed(4)}%)
-                              </span>
+                              {row.hasPhaseDivergence && cell.maturity?.isImmature && (
+                                <MaturityBadge maturity={cell.maturity} />
+                              )}
                             </span>
                           </Tooltip>
                         ) : (
@@ -401,8 +522,17 @@ export default function FundingRatesTable({
                     );
                   })}
                   <td className="py-2 pr-4 text-right whitespace-nowrap">
-                    <span className="inline-block w-[8ch] font-mono text-right font-semibold tabular-nums text-orange-400">
-                      {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      {row.hasPhaseDivergence && (
+                        <Tooltip content="Exchanges are at very different points in their funding interval — this spread compares a settled rate against one that just reset.">
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-orange-400/40 bg-orange-500/10 text-[10px] leading-none font-semibold text-orange-400">
+                            ~
+                          </span>
+                        </Tooltip>
+                      )}
+                      <span className="inline-block w-[8ch] font-mono text-right font-semibold tabular-nums text-orange-400">
+                        {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
+                      </span>
                     </span>
                   </td>
                 </tr>
