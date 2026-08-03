@@ -37,6 +37,11 @@ export type FundingRateRow = {
   last_paid_rate_percent: number | null;
   last_paid_at: string | null;
   maturity: Maturity | null;
+  // Ставка last_paid_rate_percent хранится "как есть" (не годовая), приводим
+  // к APR тем же способом, что и прогноз — чтобы фигуры были на одной шкале
+  // и их можно было сравнивать на глаз (прогноз преувеличивает/преуменьшает
+  // относительно факта — см. пример с ATOM/Bybit).
+  last_paid_apr_percent: number | null;
 };
 
 export type GroupedFundingRate = {
@@ -69,7 +74,12 @@ function computeMaturity(
   return { elapsedMs, totalMs, fraction, isImmature: fraction < IMMATURE_FRACTION_THRESHOLD };
 }
 
-type FundingRateDbRow = Omit<FundingRateRow, "maturity">;
+function toApr(ratePercent: number, intervalHours: number): number {
+  const paymentsPerYear = (24 / intervalHours) * 365;
+  return ratePercent * paymentsPerYear;
+}
+
+type FundingRateDbRow = Omit<FundingRateRow, "maturity" | "last_paid_apr_percent">;
 
 export async function getGroupedFundingRates(): Promise<GroupedFundingRatesResult> {
   const supabase = createSupabaseClient();
@@ -96,6 +106,10 @@ export async function getGroupedFundingRates(): Promise<GroupedFundingRatesResul
       latestByPair.set(key, {
         ...row,
         maturity: computeMaturity(row.next_funding_at, row.interval_hours, nowMs),
+        last_paid_apr_percent:
+          row.last_paid_rate_percent !== null
+            ? toApr(row.last_paid_rate_percent, row.interval_hours)
+            : null,
       });
     }
   }

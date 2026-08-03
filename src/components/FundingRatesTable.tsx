@@ -82,13 +82,31 @@ function formatMaturity(maturity: Maturity): string {
 }
 
 function cellTooltipContent(cell: FundingRateRow): string {
-  const base = `${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`;
-  if (!cell.maturity) return base;
+  const parts = [`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`];
 
-  const progress = `${formatMaturity(cell.maturity)} into this interval`;
-  return cell.maturity.isImmature
-    ? `${base} · ${progress} — too early, forecast may still change`
-    : `${base} · ${progress}`;
+  if (cell.maturity) {
+    const progress = `${formatMaturity(cell.maturity)} into this interval`;
+    parts.push(
+      cell.maturity.isImmature ? `${progress} — too early, forecast may still change` : progress,
+    );
+  }
+
+  if (cell.last_paid_apr_percent !== null) {
+    parts.push(`last paid ${cell.last_paid_apr_percent.toFixed(2)}% APR`);
+  }
+
+  return parts.join(" · ");
+}
+
+// Прогноз на следующую выплату и то, что фактически выплатили в прошлый раз,
+// — на одной шкале (APR), чтобы было видно, насколько прогноз завышает или
+// занижает реальность (пример: ATOM/Bybit прогноз -29.67% APR, факт ~-22%).
+function LastPaidHint({ aprPercent }: { aprPercent: number }) {
+  return (
+    <span className="block font-mono text-[11px] tabular-nums text-zinc-400">
+      paid {aprPercent.toFixed(2)}%
+    </span>
+  );
 }
 
 // Всегда видимый значок (не только по наведению — важно для мобильных карточек,
@@ -313,6 +331,9 @@ function FundingRateCard({ row }: { row: GroupedFundingRate }) {
                 <span className="block font-mono text-xs tabular-nums text-zinc-400">
                   {cell.rate_percent.toFixed(4)}% · {cell.interval_hours}h
                 </span>
+                {cell.last_paid_apr_percent !== null && (
+                  <LastPaidHint aprPercent={cell.last_paid_apr_percent} />
+                )}
                 {row.hasPhaseDivergence && cell.maturity?.isImmature && (
                   <MaturityBadge maturity={cell.maturity} />
                 )}
@@ -510,6 +531,9 @@ export default function FundingRatesTable({
                                   ({cell.rate_percent.toFixed(4)}%)
                                 </span>
                               </span>
+                              {cell.last_paid_apr_percent !== null && (
+                                <LastPaidHint aprPercent={cell.last_paid_apr_percent} />
+                              )}
                               {row.hasPhaseDivergence && cell.maturity?.isImmature && (
                                 <MaturityBadge maturity={cell.maturity} />
                               )}
