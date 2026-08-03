@@ -1,4 +1,5 @@
 import { getLatestFundingRates } from "@/lib/funding-rates";
+import RelativeTime from "@/components/RelativeTime";
 
 export const revalidate = 0;
 
@@ -40,7 +41,7 @@ export default async function FundingPage() {
                       {row.apr_percent.toFixed(2)}%
                     </td>
                     <td className="py-2 text-zinc-400">
-                      {new Date(row.fetched_at).toLocaleString("ru-RU")}
+                      <RelativeTime dateIso={row.fetched_at} />
                     </td>
                   </tr>
                 ))}
