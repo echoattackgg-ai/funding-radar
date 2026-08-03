@@ -16,13 +16,12 @@ const EXCHANGES: ExchangeName[] = ["Binance", "Bybit", "OKX"];
 const BASE_RATE_PERCENT = 0.01;
 const EPSILON = 1e-9;
 
-type SortKey = "symbol" | ExchangeName | "spread" | "updated";
+type SortKey = "symbol" | ExchangeName | "spread";
 type SortDirection = "asc" | "desc";
 
 function sortValue(row: GroupedFundingRate, key: SortKey): number | string {
   if (key === "symbol") return row.symbol;
   if (key === "spread") return row.spread ?? -Infinity;
-  if (key === "updated") return row.updatedAt;
   return row.rates[key]?.apr_percent ?? -Infinity;
 }
 
@@ -72,9 +71,21 @@ function SortableHeader({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="underline decoration-dotted hover:text-foreground"
+          className="inline-flex items-center gap-0.5 text-sky-400/90 underline decoration-dotted underline-offset-2 hover:text-sky-300"
         >
           {label}
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M7 17 17 7M9 7h8v8" />
+          </svg>
         </a>
       ) : (
         label
@@ -118,6 +129,15 @@ export default function FundingRatesTable({
 
   const visibleRows = limit ? sortedRows.slice(0, limit) : sortedRows;
 
+  const latestUpdatedAt = useMemo(
+    () =>
+      rows.reduce(
+        (latest, row) => (row.updatedAt > latest ? row.updatedAt : latest),
+        rows[0]?.updatedAt ?? "",
+      ),
+    [rows],
+  );
+
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
       setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"));
@@ -150,7 +170,14 @@ export default function FundingRatesTable({
 
   return (
     <GlassCard className={`w-full ${limit ? "max-w-3xl" : "max-w-4xl"} p-6`}>
-      <h2 className="mb-4 text-lg font-medium">Funding rates by coin</h2>
+      <div className="mb-4 flex items-baseline justify-between gap-4">
+        <h2 className="text-lg font-medium">Funding rates by coin</h2>
+        {latestUpdatedAt && (
+          <p className="text-xs whitespace-nowrap text-zinc-500">
+            Updated <RelativeTime dateIso={latestUpdatedAt} />
+          </p>
+        )}
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm tabular-nums">
@@ -178,14 +205,6 @@ export default function FundingRatesTable({
               <SortableHeader
                 label="Spread"
                 sortKeyValue="spread"
-                align="right"
-                sortKey={sortKey}
-                sortDirection={sortDirection}
-                onSort={toggleSort}
-              />
-              <SortableHeader
-                label="Updated"
-                sortKeyValue="updated"
                 align="right"
                 sortKey={sortKey}
                 sortDirection={sortDirection}
@@ -224,11 +243,13 @@ export default function FundingRatesTable({
                       >
                         {cell ? (
                           <span
-                            className="whitespace-nowrap"
+                            className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap"
                             title={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}
                           >
-                            <span className="text-base font-semibold">{cell.apr_percent.toFixed(2)}%</span>{" "}
-                            <span className="text-xs text-zinc-500/80">
+                            <span className="inline-block w-[8ch] text-right text-base font-semibold tabular-nums">
+                              {cell.apr_percent.toFixed(2)}%
+                            </span>
+                            <span className="inline-block w-[11ch] text-right text-xs text-zinc-500/80 tabular-nums">
                               ({cell.rate_percent.toFixed(4)}%)
                             </span>
                           </span>
@@ -239,10 +260,9 @@ export default function FundingRatesTable({
                     );
                   })}
                   <td className="py-2 pr-4 text-right whitespace-nowrap">
-                    {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
-                  </td>
-                  <td className="py-2 text-right whitespace-nowrap text-zinc-400">
-                    <RelativeTime dateIso={row.updatedAt} />
+                    <span className="inline-block w-[8ch] text-right tabular-nums">
+                      {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
+                    </span>
                   </td>
                 </tr>
               );
