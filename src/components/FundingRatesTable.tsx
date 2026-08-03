@@ -7,6 +7,12 @@ import RelativeTime from "@/components/RelativeTime";
 
 const EXCHANGES: ExchangeName[] = ["Binance", "Bybit", "OKX"];
 
+// Биржи часто возвращают одну и ту же "базовую" ставку 0.0100% за интервал,
+// когда рынок не создаёт давления на фандинг ни на одной из бирж — такие
+// строки одинаковы везде и не несут сравнительной информации.
+const BASE_RATE_PERCENT = 0.01;
+const EPSILON = 1e-9;
+
 type SortKey = "symbol" | ExchangeName | "spread" | "updated";
 type SortDirection = "asc" | "desc";
 
@@ -15,6 +21,21 @@ function sortValue(row: GroupedFundingRate, key: SortKey): number | string {
   if (key === "spread") return row.spread ?? -Infinity;
   if (key === "updated") return row.updatedAt;
   return row.rates[key]?.apr_percent ?? -Infinity;
+}
+
+function hasVisibleSpread(row: GroupedFundingRate): boolean {
+  return row.spread !== null && Math.abs(row.spread) > EPSILON;
+}
+
+function isUninformativeRow(row: GroupedFundingRate): boolean {
+  if (hasVisibleSpread(row)) return false;
+
+  const present = EXCHANGES.map((exchange) => row.rates[exchange]).filter(
+    (cell): cell is FundingRateRow => !!cell,
+  );
+  if (present.length < 2) return false;
+
+  return present.every((cell) => Math.abs(cell.rate_percent - BASE_RATE_PERCENT) < EPSILON);
 }
 
 export default function FundingRatesTable({
@@ -32,6 +53,10 @@ export default function FundingRatesTable({
   const sortedRows = useMemo(() => {
     const copy = [...rows];
     copy.sort((a, b) => {
+      const aBoring = isUninformativeRow(a);
+      const bBoring = isUninformativeRow(b);
+      if (aBoring !== bBoring) return aBoring ? 1 : -1;
+
       const aValue = sortValue(a, sortKey);
       const bValue = sortValue(b, sortKey);
       const comparison =
@@ -101,8 +126,9 @@ export default function FundingRatesTable({
               const present = EXCHANGES.map((exchange) => row.rates[exchange]).filter(
                 (cell): cell is FundingRateRow => !!cell,
               );
-              const maxApr = present.length >= 2 ? Math.max(...present.map((c) => c.apr_percent)) : null;
-              const minApr = present.length >= 2 ? Math.min(...present.map((c) => c.apr_percent)) : null;
+              const showHighlight = hasVisibleSpread(row);
+              const maxApr = showHighlight ? Math.max(...present.map((c) => c.apr_percent)) : null;
+              const minApr = showHighlight ? Math.min(...present.map((c) => c.apr_percent)) : null;
 
               return (
                 <tr key={row.symbol}>
@@ -125,7 +151,7 @@ export default function FundingRatesTable({
                         }
                       >
                         {cell ? (
-                          <span title={`Interval: ${cell.interval_hours}h`}>
+                          <span title={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}>
                             <span className="font-medium">{cell.apr_percent.toFixed(2)}%</span>{" "}
                             <span className="text-xs text-zinc-500">
                               ({cell.rate_percent.toFixed(4)}%)
