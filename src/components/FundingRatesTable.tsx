@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ExchangeName, FundingRateRow, GroupedFundingRate } from "@/lib/funding-rates";
+import { AFFILIATE_LINKS } from "@/lib/affiliate-links";
 import RelativeTime from "@/components/RelativeTime";
 
 const EXCHANGES: ExchangeName[] = ["Binance", "Bybit", "OKX"];
@@ -88,14 +89,34 @@ export default function FundingRatesTable({
     );
   }
 
-  function SortableHeader({ label, sortKeyValue }: { label: string; sortKeyValue: SortKey }) {
+  function SortableHeader({
+    label,
+    sortKeyValue,
+    href,
+  }: {
+    label: string;
+    sortKeyValue: SortKey;
+    href?: string;
+  }) {
     const active = sortKey === sortKeyValue;
     return (
       <th
         className="cursor-pointer pb-2 pr-4 font-medium select-none hover:text-zinc-200"
         onClick={() => toggleSort(sortKeyValue)}
       >
-        {label}
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="underline decoration-dotted hover:text-foreground"
+          >
+            {label}
+          </a>
+        ) : (
+          label
+        )}
         {active && (
           <span className="ml-1 text-zinc-500">{sortDirection === "asc" ? "▲" : "▼"}</span>
         )}
@@ -115,7 +136,12 @@ export default function FundingRatesTable({
             <tr className="text-xs text-zinc-400 uppercase">
               <SortableHeader label="Coin" sortKeyValue="symbol" />
               {EXCHANGES.map((exchange) => (
-                <SortableHeader key={exchange} label={exchange} sortKeyValue={exchange} />
+                <SortableHeader
+                  key={exchange}
+                  label={exchange}
+                  sortKeyValue={exchange}
+                  href={AFFILIATE_LINKS[exchange]}
+                />
               ))}
               <SortableHeader label="Spread" sortKeyValue="spread" />
               <SortableHeader label="Updated" sortKeyValue="updated" />
@@ -176,8 +202,12 @@ export default function FundingRatesTable({
         </table>
       </div>
 
+      <p className="mt-4 text-xs text-zinc-500">
+        Exchange links are affiliate links. We may earn a commission.
+      </p>
+
       {limit && seeAllHref && rows.length > limit && (
-        <div className="mt-4 text-sm">
+        <div className="mt-2 text-sm">
           <Link href={seeAllHref} className="text-zinc-300 underline hover:text-foreground">
             See all →
           </Link>
