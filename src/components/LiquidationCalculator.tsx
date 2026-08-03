@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import GlassCard from "@/components/GlassCard";
 
 type Direction = "long" | "short";
 
@@ -45,7 +46,7 @@ export default function LiquidationCalculator() {
   }, [positionSize, leverage, entryPrice, direction]);
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
+    <GlassCard className="w-full max-w-md p-6">
       <h2 className="mb-4 text-lg font-medium">
         Liquidation price calculator
       </h2>
@@ -97,7 +98,7 @@ export default function LiquidationCalculator() {
         {result ? (
           <>
             <p className="text-sm text-zinc-400">Liquidation price</p>
-            <p className="text-2xl font-semibold">
+            <p className="text-2xl font-semibold tabular-nums">
               $
               {result.liquidationPrice.toLocaleString("en-US", {
                 maximumFractionDigits: 2,
@@ -106,7 +107,7 @@ export default function LiquidationCalculator() {
             <p className="mt-3 text-sm text-zinc-400">
               The market needs to move against the position by
             </p>
-            <p className="text-2xl font-semibold">
+            <p className="text-2xl font-semibold tabular-nums">
               {result.percentMove.toFixed(2)}%
             </p>
           </>
@@ -117,31 +118,21 @@ export default function LiquidationCalculator() {
         )}
       </div>
 
-      <div className="relative mt-4 overflow-hidden rounded-2xl border border-white/15 bg-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-xl backdrop-saturate-150">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/25 via-white/5 to-transparent opacity-60"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -inset-px rounded-2xl border border-white/10"
-        />
-        <div className="relative">
-          <p className="mb-2 text-xs font-medium tracking-wide text-zinc-300 uppercase">
-            Calculation formula
-          </p>
-          <p className="font-mono text-xs leading-relaxed text-zinc-300">
-            Isolated margin, simplified — no fees, no maintenance margin
-            rate:
-            <br />
-            Long: Liq_price = Entry_price × (1 − 1 / Leverage)
-            <br />
-            Short: Liq_price = Entry_price × (1 + 1 / Leverage)
-            <br />
-            Move against position = 100 / Leverage, %
-          </p>
-        </div>
-      </div>
-    </div>
+      <GlassCard className="mt-4 p-4">
+        <p className="mb-2 text-xs font-medium tracking-wide text-zinc-300 uppercase">
+          Calculation formula
+        </p>
+        <p className="font-mono text-xs leading-relaxed text-zinc-300">
+          Isolated margin, simplified — no fees, no maintenance margin
+          rate:
+          <br />
+          Long: Liq_price = Entry_price × (1 − 1 / Leverage)
+          <br />
+          Short: Liq_price = Entry_price × (1 + 1 / Leverage)
+          <br />
+          Move against position = 100 / Leverage, %
+        </p>
+      </GlassCard>
+    </GlassCard>
   );
 }

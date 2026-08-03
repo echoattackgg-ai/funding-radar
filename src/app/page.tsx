@@ -5,14 +5,14 @@ import { getGroupedFundingRates } from "@/lib/funding-rates";
 export const revalidate = 0;
 
 export default async function Home() {
-  const rows = await getGroupedFundingRates();
+  const { rows, error } = await getGroupedFundingRates();
 
   return (
     <div className="flex flex-1 flex-col items-center gap-8 px-4 py-12">
       <h1 className="text-4xl font-semibold tracking-tight text-foreground">
         Funding Radar
       </h1>
-      <FundingRatesTable rows={rows} limit={5} seeAllHref="/funding" />
+      <FundingRatesTable rows={rows} error={error} limit={5} seeAllHref="/funding" />
       <LiquidationCalculator />
     </div>
   );

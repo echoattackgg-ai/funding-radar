@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import CryptoSideBackground from "@/components/CryptoSideBackground";
+import SiteHeader from "@/components/SiteHeader";
+import SiteFooter from "@/components/SiteFooter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +32,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <CryptoSideBackground />
-        {children}
+        <SiteHeader />
+        <div className="flex flex-1 flex-col">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

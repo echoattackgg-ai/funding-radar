@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import type { ExchangeName, FundingRateRow, GroupedFundingRate } from "@/lib/funding-rates";
 import { AFFILIATE_LINKS } from "@/lib/affiliate-links";
 import RelativeTime from "@/components/RelativeTime";
+import GlassCard from "@/components/GlassCard";
+import StateMessage from "@/components/StateMessage";
 
 const EXCHANGES: ExchangeName[] = ["Binance", "Bybit", "OKX"];
 
@@ -39,12 +41,57 @@ function isUninformativeRow(row: GroupedFundingRate): boolean {
   return present.every((cell) => Math.abs(cell.rate_percent - BASE_RATE_PERCENT) < EPSILON);
 }
 
+function SortableHeader({
+  label,
+  sortKeyValue,
+  href,
+  align = "left",
+  sortKey,
+  sortDirection,
+  onSort,
+}: {
+  label: string;
+  sortKeyValue: SortKey;
+  href?: string;
+  align?: "left" | "right";
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sortKey === sortKeyValue;
+  return (
+    <th
+      className={`cursor-pointer pb-2 pr-4 font-medium select-none hover:text-zinc-200 ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
+      onClick={() => onSort(sortKeyValue)}
+    >
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="underline decoration-dotted hover:text-foreground"
+        >
+          {label}
+        </a>
+      ) : (
+        label
+      )}
+      {active && <span className="ml-1 text-zinc-500">{sortDirection === "asc" ? "▲" : "▼"}</span>}
+    </th>
+  );
+}
+
 export default function FundingRatesTable({
   rows,
+  error,
   limit,
   seeAllHref,
 }: {
   rows: GroupedFundingRate[];
+  error?: boolean;
   limit?: number;
   seeAllHref?: string;
 }) {
@@ -80,74 +127,73 @@ export default function FundingRatesTable({
     }
   }
 
-  if (rows.length === 0) {
+  if (error) {
     return (
-      <div className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 p-6">
-        <h2 className="mb-2 text-lg font-medium">Funding rates by coin</h2>
-        <p className="text-sm text-zinc-400">No data yet.</p>
-      </div>
+      <StateMessage
+        title="Funding rates by coin"
+        description="Couldn't load rates right now. Try refreshing the page."
+        variant="error"
+        className="w-full max-w-2xl"
+      />
     );
   }
 
-  function SortableHeader({
-    label,
-    sortKeyValue,
-    href,
-  }: {
-    label: string;
-    sortKeyValue: SortKey;
-    href?: string;
-  }) {
-    const active = sortKey === sortKeyValue;
+  if (rows.length === 0) {
     return (
-      <th
-        className="cursor-pointer pb-2 pr-4 font-medium select-none hover:text-zinc-200"
-        onClick={() => toggleSort(sortKeyValue)}
-      >
-        {href ? (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="underline decoration-dotted hover:text-foreground"
-          >
-            {label}
-          </a>
-        ) : (
-          label
-        )}
-        {active && (
-          <span className="ml-1 text-zinc-500">{sortDirection === "asc" ? "▲" : "▼"}</span>
-        )}
-      </th>
+      <StateMessage
+        title="Funding rates by coin"
+        description="No data yet."
+        className="w-full max-w-2xl"
+      />
     );
   }
 
   return (
-    <div
-      className={`w-full ${limit ? "max-w-2xl" : "max-w-4xl"} rounded-xl border border-white/10 bg-white/5 p-6`}
-    >
+    <GlassCard className={`w-full ${limit ? "max-w-3xl" : "max-w-4xl"} p-6`}>
       <h2 className="mb-4 text-lg font-medium">Funding rates by coin</h2>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-left text-sm tabular-nums">
           <thead>
             <tr className="text-xs text-zinc-400 uppercase">
-              <SortableHeader label="Coin" sortKeyValue="symbol" />
+              <SortableHeader
+                label="Coin"
+                sortKeyValue="symbol"
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={toggleSort}
+              />
               {EXCHANGES.map((exchange) => (
                 <SortableHeader
                   key={exchange}
                   label={exchange}
                   sortKeyValue={exchange}
                   href={AFFILIATE_LINKS[exchange]}
+                  align="right"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={toggleSort}
                 />
               ))}
-              <SortableHeader label="Spread" sortKeyValue="spread" />
-              <SortableHeader label="Updated" sortKeyValue="updated" />
+              <SortableHeader
+                label="Spread"
+                sortKeyValue="spread"
+                align="right"
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={toggleSort}
+              />
+              <SortableHeader
+                label="Updated"
+                sortKeyValue="updated"
+                align="right"
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={toggleSort}
+              />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-white/5">
             {visibleRows.map((row) => {
               const present = EXCHANGES.map((exchange) => row.rates[exchange]).filter(
                 (cell): cell is FundingRateRow => !!cell,
@@ -157,7 +203,7 @@ export default function FundingRatesTable({
               const minApr = showHighlight ? Math.min(...present.map((c) => c.apr_percent)) : null;
 
               return (
-                <tr key={row.symbol}>
+                <tr key={row.symbol} className="transition-colors hover:bg-white/5">
                   <td className="py-2 pr-4 font-medium">{row.symbol}</td>
                   {EXCHANGES.map((exchange) => {
                     const cell = row.rates[exchange];
@@ -168,7 +214,7 @@ export default function FundingRatesTable({
                       <td
                         key={exchange}
                         className={
-                          "py-2 pr-4" +
+                          "py-2 pr-4 text-right" +
                           (isMax
                             ? " bg-green-500/10 text-green-400"
                             : isMin
@@ -177,9 +223,12 @@ export default function FundingRatesTable({
                         }
                       >
                         {cell ? (
-                          <span title={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}>
-                            <span className="font-medium">{cell.apr_percent.toFixed(2)}%</span>{" "}
-                            <span className="text-xs text-zinc-500">
+                          <span
+                            className="whitespace-nowrap"
+                            title={`${cell.rate_percent.toFixed(4)}% per ${cell.interval_hours}h interval`}
+                          >
+                            <span className="text-base font-semibold">{cell.apr_percent.toFixed(2)}%</span>{" "}
+                            <span className="text-xs text-zinc-500/80">
                               ({cell.rate_percent.toFixed(4)}%)
                             </span>
                           </span>
@@ -189,10 +238,10 @@ export default function FundingRatesTable({
                       </td>
                     );
                   })}
-                  <td className="py-2 pr-4">
+                  <td className="py-2 pr-4 text-right whitespace-nowrap">
                     {row.spread !== null ? `${row.spread.toFixed(2)} pp` : "—"}
                   </td>
-                  <td className="py-2 text-zinc-400">
+                  <td className="py-2 text-right whitespace-nowrap text-zinc-400">
                     <RelativeTime dateIso={row.updatedAt} />
                   </td>
                 </tr>
@@ -202,17 +251,13 @@ export default function FundingRatesTable({
         </table>
       </div>
 
-      <p className="mt-4 text-xs text-zinc-500">
-        Exchange links are affiliate links. We may earn a commission.
-      </p>
-
       {limit && seeAllHref && rows.length > limit && (
-        <div className="mt-2 text-sm">
+        <div className="mt-4 text-sm">
           <Link href={seeAllHref} className="text-zinc-300 underline hover:text-foreground">
             See all →
           </Link>
         </div>
       )}
-    </div>
+    </GlassCard>
   );
 }

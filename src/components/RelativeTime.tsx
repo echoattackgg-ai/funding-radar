@@ -35,16 +35,16 @@ function formatAbsoluteUtc(date: Date): string {
 
 export default function RelativeTime({ dateIso }: { dateIso: string }) {
   const date = new Date(dateIso);
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
 
   return (
     <span title={formatAbsoluteUtc(date)} suppressHydrationWarning>
-      {formatRelative(Date.now() - date.getTime())}
+      {formatRelative(now - date.getTime())}
     </span>
   );
 }

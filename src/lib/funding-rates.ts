@@ -21,7 +21,12 @@ export type GroupedFundingRate = {
   updatedAt: string;
 };
 
-export async function getGroupedFundingRates(): Promise<GroupedFundingRate[]> {
+export type GroupedFundingRatesResult = {
+  rows: GroupedFundingRate[];
+  error: boolean;
+};
+
+export async function getGroupedFundingRates(): Promise<GroupedFundingRatesResult> {
   const supabase = createSupabaseClient();
   const { data, error } = await supabase
     .from("funding_rates")
@@ -29,8 +34,11 @@ export async function getGroupedFundingRates(): Promise<GroupedFundingRate[]> {
     .order("fetched_at", { ascending: false })
     .limit(500);
 
-  if (error || !data) {
-    return [];
+  if (error) {
+    return { rows: [], error: true };
+  }
+  if (!data) {
+    return { rows: [], error: false };
   }
 
   const latestByPair = new Map<string, FundingRateRow>();
@@ -64,5 +72,5 @@ export async function getGroupedFundingRates(): Promise<GroupedFundingRate[]> {
 
   grouped.sort((a, b) => (b.spread ?? -Infinity) - (a.spread ?? -Infinity));
 
-  return grouped;
+  return { rows: grouped, error: false };
 }
